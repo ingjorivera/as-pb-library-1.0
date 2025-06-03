@@ -1,0 +1,53 @@
+{
+  "name": "appsmith-pocketbase",
+  "version": "1.1.0",
+  "description": "PocketBase integration library optimized for Appsmith with universal compatibility",
+  "main": "appsmith-pb.js",
+  "module": "appsmith-pb.js",
+  "umd:main": "appsmith-pb.js",
+  "unpkg": "appsmith-pb.js",
+  "jsdelivr": "appsmith-pb.js",
+  "browser": "appsmith-pb.js",
+  "types": "appsmith-pb.d.ts",
+  "files": [
+    "appsmith-pb.js",
+    "appsmith-pb.d.ts",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "echo \"No build step needed - UMD ready\"",
+    "dev": "echo \"Development mode - load directly in browser\""
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ingjorivera/as-pb-library-1.0.git"
+  },
+  "keywords": [
+    "appsmith",
+    "pocketbase",
+    "database",
+    "auth",
+    "crud",
+    "umd",
+    "javascript",
+    "library"
+  ],
+  "author": "Jorge Rivera <jorivera@gmail.com>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/ingjorivera/as-pb-library-1.0/issues"
+  },
+  "homepage": "https://github.com/ingjorivera/as-pb-library-1.0#readme",
+  "peerDependencies": {
+    "pocketbase": "^0.19.0"
+  },
+  "devDependencies": {},
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
