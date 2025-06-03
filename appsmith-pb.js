@@ -1,21 +1,31 @@
 /**
- * Appsmith PocketBase Library - VERSIÓN COMPATIBLE CON APPSMITH
+ * Appsmith PocketBase Library - UMD Version
+ * Compatible con Appsmith, CDN, y npm
  * 
- * Esta versión está optimizada para funcionar dentro del sandbox de Appsmith
- * sin acceso a localStorage, window, ni otras APIs restringidas.
- * 
- * Versión: 1.1.0-appsmith
- * Autor: Tu Nombre
- * Licencia: MIT
+ * Versión: 1.1.0-umd
+ * GitHub: https://github.com/ingjorivera/as-pb-library-1.0
+ * CDN: https://cdn.jsdelivr.net/gh/ingjorivera/as-pb-library-1.0@main/appsmith-pb.js
  */
 
-const AppsmithPB = (function() {
+(function (root, factory) {
+  // UMD pattern para máxima compatibilidad
+  if (typeof define === 'function' && define.amd) {
+    // AMD (RequireJS)
+    define([], factory);
+  } else if (typeof module === 'object' && module.exports) {
+    // Node.js/CommonJS
+    module.exports = factory();
+  } else {
+    // Browser globals (incluye Appsmith)
+    root.AppsmithPB = factory();
+  }
+}(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
 
-  const VERSION = '1.1.0-appsmith';
+  const VERSION = '1.1.0-umd';
   
   // ================================================================
-  // CONFIGURACIONES BASE (COMPATIBLES CON APPSMITH)
+  // CONFIGURACIONES BASE
   // ================================================================
   
   const environmentConfigs = {
@@ -81,47 +91,104 @@ const AppsmithPB = (function() {
   };
   
   // ================================================================
-  // CLASE DE CONFIGURACIÓN PARA APPSMITH
+  // STORAGE COMPATIBLE CON APPSMITH
   // ================================================================
   
-  class AppsmithEnvironment {
+  function createCompatibleStorage() {
+    // Detectar el entorno
+    const isAppsmith = typeof appsmith !== 'undefined';
+    const hasLocalStorage = typeof localStorage !== 'undefined';
+    
+    return {
+      setItem: function(key, value) {
+        try {
+          // Prioridad 1: Appsmith storeValue
+          if (isAppsmith && typeof storeValue === 'function') {
+            storeValue(key, value, true);
+            return true;
+          }
+          
+          // Prioridad 2: localStorage (si está disponible)
+          if (hasLocalStorage) {
+            localStorage.setItem(key, typeof value === 'string' ? value : JSON.stringify(value));
+            return true;
+          }
+          
+          // Fallback: memoria (solo para esta sesión)
+          this._memoryStorage = this._memoryStorage || {};
+          this._memoryStorage[key] = value;
+          return true;
+          
+        } catch (error) {
+          console.warn('[AppsmithPB] Storage setItem failed:', error);
+          return false;
+        }
+      },
+      
+      getItem: function(key) {
+        try {
+          // Prioridad 1: Appsmith store
+          if (isAppsmith && typeof appsmith !== 'undefined' && appsmith.store && appsmith.store[key] !== undefined) {
+            return appsmith.store[key];
+          }
+          
+          // Prioridad 2: localStorage
+          if (hasLocalStorage && localStorage.getItem(key) !== null) {
+            return localStorage.getItem(key);
+          }
+          
+          // Fallback: memoria
+          if (this._memoryStorage && this._memoryStorage[key] !== undefined) {
+            return this._memoryStorage[key];
+          }
+          
+          return null;
+          
+        } catch (error) {
+          console.warn('[AppsmithPB] Storage getItem failed:', error);
+          return null;
+        }
+      },
+      
+      removeItem: function(key) {
+        try {
+          // Appsmith
+          if (isAppsmith && typeof storeValue === 'function') {
+            storeValue(key, null, true);
+          }
+          
+          // localStorage
+          if (hasLocalStorage) {
+            localStorage.removeItem(key);
+          }
+          
+          // memoria
+          if (this._memoryStorage) {
+            delete this._memoryStorage[key];
+          }
+          
+        } catch (error) {
+          console.warn('[AppsmithPB] Storage removeItem failed:', error);
+        }
+      }
+    };
+  }
+  
+  // ================================================================
+  // CLASE DE CONFIGURACIÓN UNIVERSAL
+  // ================================================================
+  
+  class UniversalEnvironment {
     constructor(config = {}) {
       this.currentEnv = config.environment || 'development';
       this.customConfig = config;
       this.mergedConfig = { ...environmentConfigs[this.currentEnv], ...config };
       this.version = VERSION;
-      
-      // Storage en memoria para reemplazar localStorage
-      this.memoryStorage = {};
+      this.storage = createCompatibleStorage();
       
       this.logEnvironmentInfo();
     }
     
-    // Simular localStorage usando almacenamiento en memoria
-    setItem(key, value) {
-      try {
-        this.memoryStorage[key] = typeof value === 'string' ? value : JSON.stringify(value);
-        return true;
-      } catch (error) {
-        this.log('Error en setItem:', error);
-        return false;
-      }
-    }
-    
-    getItem(key) {
-      try {
-        return this.memoryStorage[key] || null;
-      } catch (error) {
-        this.log('Error en getItem:', error);
-        return null;
-      }
-    }
-    
-    removeItem(key) {
-      delete this.memoryStorage[key];
-    }
-    
-    // Configurar variables de entorno
     configure(config) {
       this.customConfig = { ...this.customConfig, ...config };
       this.mergedConfig = { ...environmentConfigs[this.currentEnv], ...this.customConfig };
@@ -130,22 +197,18 @@ const AppsmithPB = (function() {
       return true;
     }
     
-    // Obtener variable de configuración
     get(key, defaultValue = null) {
       return this.mergedConfig.hasOwnProperty(key) ? this.mergedConfig[key] : defaultValue;
     }
     
-    // Verificar si existe una variable
     has(key) {
       return this.mergedConfig.hasOwnProperty(key);
     }
     
-    // Obtener entorno actual
     getEnvironment() {
       return this.currentEnv;
     }
     
-    // Cambiar entorno
     setEnvironment(env) {
       if (['development', 'staging', 'production'].includes(env)) {
         this.currentEnv = env;
@@ -156,7 +219,6 @@ const AppsmithPB = (function() {
       return false;
     }
     
-    // Verificadores de entorno
     isDevelopment() {
       return this.currentEnv === 'development';
     }
@@ -169,12 +231,10 @@ const AppsmithPB = (function() {
       return this.currentEnv === 'production';
     }
     
-    // Obtener toda la configuración
     getAll() {
       return { ...this.mergedConfig };
     }
     
-    // Validar configuración requerida
     validateRequiredConfig(requiredKeys) {
       const missing = requiredKeys.filter(key => !this.has(key));
       
@@ -187,23 +247,22 @@ const AppsmithPB = (function() {
       return true;
     }
     
-    // Logging seguro para Appsmith
     log(message, data = null) {
       if (!this.get('ENABLE_DEBUG')) return;
-      
       console.log(`🌍 [AppsmithPB v${VERSION}] ${message}`, data || '');
     }
     
     logEnvironmentInfo() {
       if (!this.get('ENABLE_DEBUG')) return;
       
-      console.log(`🚀 AppsmithPB v${VERSION} inicializado`);
+      const platform = typeof appsmith !== 'undefined' ? 'Appsmith' : 
+                      typeof window !== 'undefined' ? 'Browser' : 'Node.js';
+      
+      console.log(`🚀 AppsmithPB v${VERSION} inicializado en ${platform}`);
       console.log(`📍 Entorno: ${this.currentEnv.toUpperCase()}`);
       console.log(`🎨 Theme Color: ${this.get('THEME_COLOR')}`);
-      console.log(`🔧 Variables configuradas: ${Object.keys(this.mergedConfig).length}`);
     }
     
-    // Configuración de ejemplo
     getExampleConfig() {
       return {
         environment: 'development',
@@ -215,24 +274,22 @@ const AppsmithPB = (function() {
   }
   
   // ================================================================
-  // CLASE POCKETBASE MANAGER PARA APPSMITH
+  // CLASE POCKETBASE MANAGER UNIVERSAL
   // ================================================================
   
-  class AppsmithPocketBase {
+  class UniversalPocketBase {
     constructor(env) {
       this.env = env;
       this.pbClient = null;
       this.isInitialized = false;
       this.authInfo = null;
-      this.sessionStorage = {}; // Storage en memoria para la sesión
     }
     
     init() {
       if (this.isInitialized) return this.pbClient;
       
-      // Verificar que PocketBase esté disponible
       if (typeof PocketBase === 'undefined') {
-        throw new Error('[AppsmithPB] PocketBase library no está disponible. Asegúrate de haberla instalado en Appsmith.');
+        throw new Error('[AppsmithPB] PocketBase library no está disponible. Instálala primero.');
       }
       
       const pbUrl = this.env.get('POCKETBASE_URL');
@@ -249,7 +306,6 @@ const AppsmithPB = (function() {
       return this.pbClient;
     }
     
-    // Ocultar URLs sensibles en logs
     maskUrl(url) {
       if (!url) return 'No configurado';
       
@@ -283,7 +339,7 @@ const AppsmithPB = (function() {
     }
     
     // ================================================================
-    // MÉTODOS DE AUTENTICACIÓN ADAPTADOS PARA APPSMITH
+    // AUTENTICACIÓN
     // ================================================================
     
     async login(email, password) {
@@ -306,20 +362,11 @@ const AppsmithPB = (function() {
           loginTime: Date.now()
         };
         
-        // Usar storage en memoria en lugar de localStorage
-        this.sessionStorage.auth = JSON.stringify(this.authInfo);
-        
-        // Intentar usar storeValue de Appsmith si está disponible
-        if (typeof storeValue === 'function') {
-          try {
-            storeValue('pb_token', authData.token, true);
-            storeValue('pb_user', authData.record, true);
-            storeValue('pb_auth_env', this.env.getEnvironment(), true);
-            this.log('Datos guardados en Appsmith store');
-          } catch (error) {
-            this.log('Warning: No se pudo usar storeValue', error.message);
-          }
-        }
+        // Guardar en storage compatible
+        this.env.storage.setItem('appsmith_pb_auth', JSON.stringify(this.authInfo));
+        this.env.storage.setItem('pb_token', authData.token);
+        this.env.storage.setItem('pb_user', JSON.stringify(authData.record));
+        this.env.storage.setItem('pb_auth_env', this.env.getEnvironment());
         
         this.log('Login exitoso', { userId: authData.record.id });
         
@@ -337,19 +384,11 @@ const AppsmithPB = (function() {
       try {
         pb.authStore.clear();
         
-        // Limpiar storage en memoria
-        delete this.sessionStorage.auth;
-        
-        // Limpiar Appsmith store si está disponible
-        if (typeof storeValue === 'function') {
-          try {
-            storeValue('pb_token', null, true);
-            storeValue('pb_user', null, true);
-            storeValue('pb_auth_env', null, true);
-          } catch (error) {
-            this.log('Warning: No se pudo limpiar storeValue', error.message);
-          }
-        }
+        // Limpiar storage
+        this.env.storage.removeItem('appsmith_pb_auth');
+        this.env.storage.removeItem('pb_token');
+        this.env.storage.removeItem('pb_user');
+        this.env.storage.removeItem('pb_auth_env');
         
         this.authInfo = null;
         this.log('Logout exitoso');
@@ -366,36 +405,11 @@ const AppsmithPB = (function() {
       const pb = this.getClient();
       
       try {
-        // Intentar cargar de storage en memoria primero
-        let storedAuth = this.sessionStorage.auth;
-        
-        // Si no hay en memoria, intentar desde Appsmith store
-        if (!storedAuth && typeof appsmith !== 'undefined' && appsmith.store) {
-          try {
-            const token = appsmith.store.pb_token;
-            const user = appsmith.store.pb_user;
-            const env = appsmith.store.pb_auth_env;
-            
-            if (token && user) {
-              storedAuth = JSON.stringify({
-                token,
-                user,
-                environment: env,
-                expiresAt: Date.now() + (this.env.get('JWT_EXPIRY_HOURS', 2) * 60 * 60 * 1000),
-                refreshExpiresAt: Date.now() + (this.env.get('REFRESH_TOKEN_EXPIRY_DAYS', 7) * 24 * 60 * 60 * 1000),
-                loginTime: Date.now()
-              });
-            }
-          } catch (error) {
-            this.log('Warning: No se pudo acceder a appsmith.store', error.message);
-          }
-        }
-        
+        const storedAuth = this.env.storage.getItem('appsmith_pb_auth');
         if (!storedAuth) return false;
         
         this.authInfo = JSON.parse(storedAuth);
         
-        // Verificar entorno
         if (this.authInfo.environment !== this.env.getEnvironment()) {
           this.log('Entorno cambió, limpiando sesión');
           await this.logout();
@@ -404,14 +418,12 @@ const AppsmithPB = (function() {
         
         const now = Date.now();
         
-        // Verificar expiración del refresh token
         if (now > this.authInfo.refreshExpiresAt) {
           this.log('Refresh token expirado');
           await this.logout();
           return false;
         }
         
-        // Verificar si necesita refresh
         if (now > this.authInfo.expiresAt) {
           this.log('Token expirado, intentando refresh');
           
@@ -424,17 +436,9 @@ const AppsmithPB = (function() {
             this.authInfo.user = pb.authStore.model;
             this.authInfo.expiresAt = Date.now() + jwtExpiry;
             
-            // Actualizar storage
-            this.sessionStorage.auth = JSON.stringify(this.authInfo);
-            
-            if (typeof storeValue === 'function') {
-              try {
-                storeValue('pb_token', this.authInfo.token, true);
-                storeValue('pb_user', this.authInfo.user, true);
-              } catch (error) {
-                this.log('Warning: No se pudo actualizar storeValue', error.message);
-              }
-            }
+            this.env.storage.setItem('appsmith_pb_auth', JSON.stringify(this.authInfo));
+            this.env.storage.setItem('pb_token', this.authInfo.token);
+            this.env.storage.setItem('pb_user', JSON.stringify(this.authInfo.user));
             
             this.log('Token refrescado exitosamente');
             return true;
@@ -446,9 +450,7 @@ const AppsmithPB = (function() {
           }
         }
         
-        // Restaurar sesión en PocketBase
         pb.authStore.save(this.authInfo.token, this.authInfo.user);
-        
         this.log('Sesión válida');
         return true;
         
@@ -468,7 +470,7 @@ const AppsmithPB = (function() {
     }
     
     // ================================================================
-    // OPERACIONES CRUD
+    // CRUD OPERATIONS
     // ================================================================
     
     async create(collection, data) {
@@ -581,6 +583,8 @@ const AppsmithPB = (function() {
         pocketbaseUrl: this.maskUrl(this.env.get('POCKETBASE_URL')),
         isAuthenticated: this.isAuthenticated(),
         currentUser: this.getCurrentUser(),
+        platform: typeof appsmith !== 'undefined' ? 'Appsmith' : 
+                  typeof window !== 'undefined' ? 'Browser' : 'Node.js',
         config: {
           debugEnabled: this.env.get('ENABLE_DEBUG'),
           analyticsEnabled: this.env.get('ENABLE_ANALYTICS')
@@ -600,37 +604,29 @@ const AppsmithPB = (function() {
   }
   
   // ================================================================
-  // INICIALIZACIÓN PRINCIPAL
+  // INICIALIZACIÓN
   // ================================================================
   
-  // Crear instancia de entorno
-  const Environment = new AppsmithEnvironment();
-  
-  // Crear instancia de PocketBase Manager
-  const PocketBaseManager = new AppsmithPocketBase(Environment);
+  const Environment = new UniversalEnvironment();
+  const PocketBaseManager = new UniversalPocketBase(Environment);
   
   // ================================================================
-  // API PÚBLICA DE LA LIBRERÍA
+  // API PÚBLICA
   // ================================================================
   
-  return {
+  const AppsmithPB = {
     version: VERSION,
     
-    // Instancias principales
     Environment,
     PocketBaseManager,
     
-    // ================================================================
-    // CONFIGURACIÓN
-    // ================================================================
-    
+    // Configuración
     configure: function(config) {
       const success = Environment.configure(config);
       
       if (success) {
         console.log('✅ [AppsmithPB] Configuración actualizada exitosamente');
         
-        // Validar configuración requerida
         try {
           Environment.validateRequiredConfig(['POCKETBASE_URL']);
           console.log('✅ [AppsmithPB] Configuración mínima completa');
@@ -638,8 +634,6 @@ const AppsmithPB = (function() {
           console.warn('⚠️ [AppsmithPB]', error.message);
           console.log('💡 Ejemplo:', Environment.getExampleConfig());
         }
-      } else {
-        console.error('❌ [AppsmithPB] Error configurando');
       }
       
       return success;
@@ -675,10 +669,7 @@ const AppsmithPB = (function() {
       return Environment.setEnvironment(environment);
     },
     
-    // ================================================================
-    // FUNCIONES DE ENTORNO
-    // ================================================================
-    
+    // Funciones de entorno
     env: function(key, defaultValue) {
       return Environment.get(key, defaultValue);
     },
@@ -699,10 +690,7 @@ const AppsmithPB = (function() {
       return Environment.getEnvironment();
     },
     
-    // ================================================================
-    // FUNCIONES DE AUTENTICACIÓN
-    // ================================================================
-    
+    // Autenticación
     login: async function(email, password) {
       return await PocketBaseManager.login(email, password);
     },
@@ -723,10 +711,7 @@ const AppsmithPB = (function() {
       return PocketBaseManager.isAuthenticated();
     },
     
-    // ================================================================
-    // FUNCIONES CRUD
-    // ================================================================
-    
+    // CRUD
     create: async function(collection, data) {
       return await PocketBaseManager.create(collection, data);
     },
@@ -747,10 +732,7 @@ const AppsmithPB = (function() {
       return await PocketBaseManager.delete(collection, id);
     },
     
-    // ================================================================
-    // UTILIDADES
-    // ================================================================
-    
+    // Utilidades
     checkConnection: async function() {
       return await PocketBaseManager.checkConnection();
     },
@@ -763,15 +745,9 @@ const AppsmithPB = (function() {
       return PocketBaseManager.getClient();
     }
   };
-
-})();
-
-// Para uso en Appsmith, exportar como módulo
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = AppsmithPB;
-}
-
-// También hacer disponible globalmente para conveniencia
-if (typeof globalThis !== 'undefined') {
-  globalThis.AppsmithPB = AppsmithPB;
-}
+  
+  // Log de inicialización
+  console.log(`🚀 AppsmithPB v${VERSION} (UMD) cargado exitosamente`);
+  
+  return AppsmithPB;
+}));
